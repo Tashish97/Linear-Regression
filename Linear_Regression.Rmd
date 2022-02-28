@@ -1,0 +1,310 @@
+---
+title: "Linear Regression"
+author: "Ashish Toppo"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Dataset Link: [Medical Cost Personal Datasets](https://www.kaggle.com/mirichoi0218/insurance/version/1)
+
+Using this data set I need to predict the cost billed by a health insurance company based on some parameters.  
+**Description:**  
+**age:** age of primary beneficiary  
+**sex:** insurance contractor gender, female, male  
+**bmi:** Body mass index, providing an understanding of body, weights that are relatively high or low relative to height, objective index of body weight (kg / m ^ 2) using the ratio of height to weight, ideally 18.5 to 24.9  
+**children:** Number of children covered by health insurance / Number of dependents  
+**smoker:** Smoking  
+**region:** the beneficiary's residential area in the US, northeast, southeast, southwest, northwest.  
+**charges:** Individual medical costs billed by health insurance  
+
+### Reading of the dataset and importing necessary libraries
+```{r,error=FALSE, results = 'hide',warning=FALSE,message=FALSE}
+library(tidyverse)
+library(reshape2)
+library(caTools)
+library(corrplot)
+library(MLmetrics)
+library(ggfortify)
+data_0 <- read.csv("insurance.csv", stringsAsFactors = TRUE) #converting all strings to factors
+```
+
+```{r}
+#peeping into data
+head(data_0)
+
+# dimension of the dataset
+dim(data_0)
+
+# structure of the dataset
+str(data_0)
+```
+
+**Factors:** are the data objects which are used to categorize the data and store it as levels.  
+I'll be converting variables to factors if there comes a need to. For now I'll be jumping into analysis.
+
+### Summary Statistics
+```{r}
+summary(data_0)
+```
+
+**Observations:**  
+1. The insurance is only provided to adults only(age<=18).  
+2. The maximum age is noted to be 64 which shows that the insurance isn't covered for senior citizens.[source](https://www.hdfcergo.com/blogs/health-insurance/is-there-an-age-limit-for-availing-of-health-insurance#:~:text=Securing%20your%20financial%20stability%20especially,between%2065%20and%2080%20years.)  
+3. The data set has got nearly same proportion for both male and female.  
+4. Columns like "bmi" ,"region" and "children" are worth checking using visualization techniques.  
+5. Even the regions are somewhat in similar proportions.  
+
+### Missng Values and their proportions by columns
+```{r}
+null_cols <- colSums(is.na(data_0))/nrow(data_0)*100
+null_cols[null_cols!=0]
+```
+
+We are lucky to not have any missing data in any of the columns.  
+
+### Looking for outliers in numeric columns and their analysis
+```{r}
+box_dist <- function(x,y){
+  #` a custom function to plot histogram and box plot for a column
+  print(x %>% ggplot(aes_string(y))+geom_boxplot())
+  print(x %>% ggplot(aes_string(y))+geom_histogram(fill="orange", color="black"))
+}
+```
+### For age
+```{r}
+box_dist(data_0,"age")
+```
+
+**Observations**  
+1. There aren't any outliers.  
+2. Looking at the distribution we can see that:  
+    * Highest number of insurances was purchased by people below the age of 20, even though people don't buy insurances at such early ages so its worth checking which gender or region has such customers.  
+    * We can see a **WAVY** curve which reduces at ages near 35 and near 64, which can be thought as people normally marry in early thirties and people becoming health concerned at the early fifties.  
+    * There isn't any other pattern seen with regards to age.  
+
+### Doing some Analysis on age  
+**Q** *Linear relation b/w age and charges*  
+```{r}
+linearity <- function(df,c1,c2){
+  #`a function to produce scatter plot and checking correlation b/w independent and dependent 
+  print(df %>% ggplot(aes_string(c1,c2))+geom_point()+geom_smooth())
+  print(cor(df[c1],df[c2]))
+}
+linearity(data_0,"age","charges")
+```  
+
+**Observations**  
+1. There is a linear relation b/w age(independent) and charges(dependent) but weak correlation.  
+
+
+**Q** *Is gender a factor for getting life insurance and does age matters*
+```{r}
+data_0 %>% ggplot(aes(age))+geom_histogram(aes(fill=sex),position = "dodge")
+```
+
+**Observations**   
+1. Men tend to buy insurance at early ages(age <30).  
+2. There is an increase in no. of women choosing insurance after age 40 compared to men. It will be worth checking if regions or bmi play a role in this trend.  
+
+**Q** *Looking why there is increase in no. of women getting insured after age 40*
+```{r}
+#checking if a particular region causes this rise
+data_0 %>% filter(age>40) %>%  group_by(region) %>% summarise(table = table(sex))
+```
+
+**Observations**   
+The above table might be confusing but it's simple as sex(factor) has got levels `r levels(data_0$sex)` and first is female.  
+1. So every odd index for each region, counts the no. of females with age>40.  
+2. So it seems that region doesn't plays a role in this as regions has got (79,80,83,79) which is almost in similar proportion.  
+```{r}
+# lets check if bmi is cause for this increase
+data_1 <- data_0 #to not tamper original data
+# converting bmi's to categories
+data_1$bmi <- cut(data_1$bmi, breaks = c(-Inf,24.9,30,Inf), labels = c("healthy","overweight","obese")) 
+data_1 %>% filter(age<40) %>% group_by(bmi) %>% summarize(table=table(sex))
+```
+
+**Observations**   
+1. In the above table every odd index for each bmi category is count of females.  
+2. It can be seen that BMI is a possible cause for this rise in no. of women getting insured after age 40, they might gain weight as it's highly likely that they become mothers by this age which alters bmi.  
+3. Still compared to men women are healthy even after the age of 40(compare first two rows)
+
+**Q** *Are age and charges correlated*
+```{r}
+data_0 %>% ggplot(aes(age,charges)) + geom_point(aes(color=charges>50000))
+```
+
+**Observations**   
+1. There is a linear trend which can be observed so age influences the charges as when people age they are prone to getting ill.  
+2. There are few patients which are charged more than 50000 for some people b/w 25 to 60, maybe the got some serious illness. A look in BMI and checking if that person is a smoker might get us some insight.
+
+**Q** *Does BMI related to age and smoking*
+```{r}
+data_0 %>% ggplot(aes(age,bmi)) + geom_point(aes(color=bmi>24.9))# bmi <24.9 is overweight <30 is obese
+data_0 %>% ggplot(aes(age,bmi)) + geom_point(aes(color=smoker))
+```
+
+**Observations**  
+1. Many people are not having a healthy bmi(<24.9) as seen in the plot, they are either overweight(bmi<24.9) or obese(bmi<30).  
+2. BMI isn't affected by age but affected by life style as the points are spread evenly for all the ages. Even some people have bmi above 50 at top left for age < 25.  
+3. It's hard to tell whether smoking affects the bmi as people of all the ages smoke as per data.  
+
+**Q** *People from which region and ages choose to get insured*
+```{r}
+data_0 %>% ggplot(aes(age))+geom_histogram(aes(fill=region),position = "dodge")
+```
+
+**Observation**  
+1. People from southwest region doesn't get insured early (age<=19).  
+2. The southeast region has got the highest no. of people insured at every age as seen by the **BLUE BARS**. It might be that the data has got highest no. of points belonging to southeast region. 
+
+
+### For bmi
+```{r}
+box_dist(data_0,"bmi")
+```
+
+**Observations**  
+There are outliers as observed previously in (age vs bmi). Let's first check if bmi is related to cost of insurance.
+
+### Doing some Analysis on bmi 
+**Q** *Linear relation b/w bmi and charges*  
+```{r}
+linearity(data_0,"bmi","charges")
+```  
+
+**Observations**  
+1. There is a linear relationship(almost) b/w bmi(independent) and charges(dependent) but too weak correlation(<.2).
+
+
+**Q** *Are bmi and charges related and does region affects this relationship*
+```{r}
+data_0 %>% ggplot(aes(bmi,charges))+geom_point(aes(color=region)) #outliers seem to be above bmi of 47 in above boxplot
+```
+
+**Observations**  
+1. The outliers(bmi<47) surprisingly comes from the southeast region(blue extreme points to right).  
+2. Most of the points (especially blue which represent southwest region) has got points greater than bmi of 40. So highest degree of obese people are from southeast region.  
+So, It can be seen that i can remove the outliers in bmi as it won't affect much as it has points to preserve the trend that most points above bmi of 40 belong to **southeast region**.  
+3. It can be seen that the charges tend to drastically increase for some people with bmi<30(obese) so yes BMI influences the charges.  
+4. It is such that the people's bmi within 25 to 35 has got most of the points. It may be that the bmi of 30 is the threshold for a person to be obese and a person's might be having health issues with bmi closer to 30 or after 30.  
+
+```{r}
+# removing outliers in bmi
+data_2 <- data_0 %>% filter(!bmi>47) #not tampering original data
+# no. of rows removed
+nrow(data_0)-nrow(data_2)
+```
+
+**Q** *What type of bmi's does each region have*
+```{r}
+data_2 %>% ggplot(aes(bmi))+geom_histogram(aes(fill=region),color="black")+facet_wrap(~region)
+```
+
+**Observations**  
+1. Southeast region doesn't have underweight people(bmi<18.5).  
+2. All the regions have high no. of obese people.  
+
+### For Children
+```{r}
+box_dist(data_0,"children")
+```
+
+**Observations**  
+1. No outliers, hence no need for removal or transformation(s).  
+
+### Some analysis  
+**Q** *No. of children per region*
+```{r}
+data_2 %>% ggplot(aes(children))+geom_histogram(aes(fill=region),position = "dodge")
+```
+
+**Observations**  
+1. Southeast region has the maximum people with no children followed by northeast region.  
+2. Northwest region has the minimum people with 5 no. of children.  
+3. Southwest region has the maximum people with children <=2.  
+
+**Q** *How much of charges does each region make*
+```{r}
+data_2 %>% ggplot(aes(charges))+geom_boxplot(aes(fill=region))
+```
+
+**Observations**  
+1. Only Southwest region has not crossed the charge of 55000.  
+2. Southeast region is the most paying as the range of Q3 and Q2 is high compared to others.  
+3. There are many outliers in other regions compared to southeast region.  
+
+**Q** *Which region has most no. of smokers based on gender*
+```{r}
+data_2 %>% ggplot(aes(smoker))+geom_bar(aes(fill=region),position = "dodge")+facet_wrap(~sex)
+```
+
+**Observations**  
+1. Southeast region has the maximum people who are smokers followed by northeast region(both male and female).  
+2. Northwest has least no. of male smokers and southwest has least no. of female smokers.  
+
+**Q** *Linear regression b/w children and charges*  
+```{r}
+linearity(data_0,"children","age")
+```
+
+**Observations**  
+1. There is  a no linear relationship b/w no. of children and charges and correlation is ~0. so it's better to not consider this variable.  
+
+### Checking for collinearity  
+```{r}
+# getting the indexes of all numerical columns
+num_idx <- which(!grepl("factor|character",sapply(data_2,class)))
+M <- cor(data_2[num_idx])
+corrplot(M,method = "num",type = "lower")
+```  
+
+**Observations**  
+1. There is weak correlation(s) among independent variables. So no need to remove any columns or do any step wise relation check for variables.  
+
+### Splitting and Modelling  
+```{r}
+sample <- sample.split(data_2$charges,.7)
+train <- data_2 %>% filter(sample==TRUE)
+test <- data_2 %>% filter(sample==FALSE)
+#verifying the dimensions
+dim(test) #test set
+dim(train) #train set
+```  
+
+### Model  
+```{r}
+model <- lm(charges~age+bmi,train)
+predict_train <- predict(model,train[c("age","bmi")])
+predict_test <- predict(model,test[c("age","bmi")])
+```  
+
+### Evaluating the performance of the model
+```{r}
+summary(model)
+# RMSE of test
+RMSE(predict_test,test$charges)
+
+# RMSE of train
+RMSE(predict_train,train$charges)
+
+# R2 Score
+R2_Score(predict_test,test$charges)
+```
+```{r}
+library(ggfortify)
+autoplot(model)
+```
+
+**Observations**  
+1. The r-squared score is low as we see that the assumptions are not fulfilled for linear regression.  
+2. While looking at the correlation b/w *each independent variable* and *the dependent variable* which we found to be very low and we didn't consider one of the variables out of a total of 3 variables which leave us with only 2.  
+3. The model would have performed better if it satisfied the linearity assumption.  
+4. It's highly unlikely to find dataset which satisfies the assumptions of the linear regression.  
+5. So it's much better to move or to check tree based models.  
+6. I specially worked on this data to specifically show how tedious can be working with linear regression model but if a good dataset is found it too will perforam well.
