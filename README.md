@@ -11,9 +11,9 @@ This is project in which I applied Linear Regression Model, validating it's assu
 I have also done a complete documentation, please look into the attached pdf.
 
 # Work Done:
-•	EDA on independent variable(s) and dependent variable and answering a few questions as per my knowledge using various visulizational techniques.
-•	Wrote custom functions for various repetitive tasks.
-•	Linearity assumption check on each independent variable.
-•	Handling of outliers.
-•	Removal of columns which do not satisfy the linear regression assumptions.
-•	Validation of model using R-Square and residual plot.
+1.EDA on independent variable(s) and dependent variable and answering a few questions as per my knowledge using various visulizational techniques.
+2.Wrote custom functions for various repetitive tasks.
+3.Linearity assumption check on each independent variable.
+4.Handling of outliers.
+5.Removal of columns which do not satisfy the linear regression assumptions.
+6.Validation of model using R-Square and residual plot.
