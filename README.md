@@ -16,4 +16,5 @@ I have also done a complete documentation, please look into the attached pdf.
 3. Linearity assumption check on each independent variable.
 4. Handling of outliers.
 5. Removal of columns which do not satisfy the linear regression assumptions.
-6. Validation of model using R-Square and residual plot.
+6. Validation of model using R-Square and residual plot.  
+**Please look into the pdf for quick look at my work**
