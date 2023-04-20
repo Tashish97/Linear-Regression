@@ -18,3 +18,4 @@ I have also done a complete documentation, please look into the attached pdf.
 5. Removal of columns which do not satisfy the linear regression assumptions.
 6. Validation of model using R-Square and residual plot.  
 **Please look into the pdf for quick look at my work**
+![](https://github.com/Tashish97/Ashish-Portfolio/blob/main/images/1_9BmQv73jYA-XOODWt4k-2Q.png)
